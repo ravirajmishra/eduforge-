@@ -5,14 +5,24 @@ export type NotesStyle = 'detailed' | 'concise' | 'structured' | 'cornell' | 'ou
 export type ExerciseStyle = 'worksheet' | 'quiz' | 'problem-set' | 'case-study'
 export type ArticlePlatform = 'linkedin' | 'medium' | 'blog' | 'newsletter'
 export type ArticleTone = 'professional' | 'casual' | 'technical' | 'storytelling'
+export type ArticleContentStyle = 'professional' | 'creative' | 'concise' | 'in-depth'
+export type ContentDepth = 'concise' | 'standard' | 'detailed'
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed'
 export type ColorScheme = 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate' | 'violet'
+
+// ─── BYOK / API Keys ────────────────────────────────────────────────────────
+
+export interface ApiKeys {
+  gemini?: string
+  pexels?: string
+}
 
 // ─── Per-Document Options ──────────────────────────────────────────────────
 
 export interface PPTOptions {
-  slideCount: number          // 5–30
+  slideCount: number
   style: PPTStyle
+  contentDepth: ContentDepth
   colorScheme: ColorScheme
   includeImages: boolean
   includeWorkflow: boolean
@@ -25,9 +35,10 @@ export interface PPTOptions {
 }
 
 export interface NotesOptions {
-  pageCount: number           // 1–20
+  pageCount: number
   style: NotesStyle
-  includeCoding: boolean      // adds code blocks for tech topics
+  contentDepth: ContentDepth
+  includeCoding: boolean
   includeExamples: boolean
   includeKeyTerms: boolean
   includeQuickRecap: boolean
@@ -37,8 +48,9 @@ export interface NotesOptions {
 }
 
 export interface ExerciseOptions {
-  problemCount: number        // 5–50
+  problemCount: number
   difficulty: Difficulty
+  contentDepth: ContentDepth
   includeCoding: boolean
   includeAnswerKey: boolean
   includeHints: boolean
@@ -51,7 +63,8 @@ export interface ExerciseOptions {
 export interface ArticleOptions {
   platform: ArticlePlatform
   tone: ArticleTone
-  wordCount: number           // 300–3000
+  contentStyle: ArticleContentStyle
+  wordCount: number
   includeHashtags: boolean
   includeWorkflowDiagram: boolean
   includeStats: boolean
@@ -64,13 +77,13 @@ export interface ArticleOptions {
 export interface GenerationConfig {
   topic: string
   isTechTopic: boolean | 'auto'
+  apiKeys?: ApiKeys
 
   generatePPT: boolean
   generateNotes: boolean
   generateExercises: boolean
   generateArticle: boolean
 
-  // Global logo (can override per-doc)
   globalLogoBase64?: string
   globalWatermark?: string
 
@@ -83,7 +96,7 @@ export interface GenerationConfig {
 // ─── Generated Content Structures ──────────────────────────────────────────
 
 export interface SlideContent {
-  index: number               // semantic page index
+  index: number
   type: 'title' | 'agenda' | 'content' | 'workflow' | 'image-text' | 'code' | 'summary' | 'section-divider'
   title: string
   subtitle?: string
@@ -91,8 +104,8 @@ export interface SlideContent {
   codeBlock?: string
   codeLanguage?: string
   workflowSteps?: WorkflowStep[]
-  imageKeyword?: string       // for Pexels search
-  imageUrl?: string           // resolved Pexels URL
+  imageKeyword?: string
+  imageUrl?: string
   speakerNote?: string
   layoutHint: 'left-text-right-image' | 'full-text' | 'centered' | 'two-column' | 'workflow' | 'code'
 }
@@ -106,29 +119,29 @@ export interface WorkflowStep {
 }
 
 export interface NotePage {
-  pageIndex: number           // semantic page index
+  pageIndex: number
   sectionTitle: string
   subsections: NoteSubsection[]
 }
 
 export interface NoteSubsection {
-  lineIndex: number           // semantic line index within page
+  lineIndex: number
   heading: string
   content: string
   type: 'text' | 'bullet-list' | 'code' | 'key-term' | 'example' | 'recap-box'
-  items?: string[]            // for bullet-list type
+  items?: string[]
   codeBlock?: string
   codeLanguage?: string
 }
 
 export interface ExerciseProblem {
-  index: number               // semantic line index
+  index: number
   type: 'mcq' | 'short-answer' | 'long-answer' | 'coding' | 'true-false' | 'fill-blank' | 'case-study'
   question: string
-  options?: string[]          // for MCQ
-  starterCode?: string        // for coding
+  options?: string[]
+  starterCode?: string
   codeLanguage?: string
-  answer?: string             // if includeAnswerKey
+  answer?: string
   hint?: string
   difficulty: 'easy' | 'medium' | 'hard'
   marks: number
@@ -161,8 +174,8 @@ export interface GenerationResult {
   fileBase64?: string
   fileName?: string
   mimeType?: string
-  articleContent?: ArticleContent   // for article preview
-  workflowSvg?: string              // SVG workflow diagram
+  articleContent?: ArticleContent
+  workflowSvg?: string
   error?: string
 }
 
@@ -174,13 +187,4 @@ export interface GenerateAllResponse {
   isTechTopic: boolean
 }
 
-// ─── UI State Types ─────────────────────────────────────────────────────────
-
 export type GenerationStep = 'idle' | 'analyzing' | 'generating-ppt' | 'generating-notes' | 'generating-exercises' | 'generating-article' | 'finalizing' | 'done' | 'error'
-
-export interface UIState {
-  step: GenerationStep
-  progress: number
-  currentMessage: string
-  results?: GenerateAllResponse
-}
