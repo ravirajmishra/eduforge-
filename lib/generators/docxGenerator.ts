@@ -368,8 +368,8 @@ export async function generateExercisesBuffer(
   options: ExerciseOptions,
   topic: string
 ): Promise<Buffer> {
-  const allParagraphs: Paragraph[] = []
-
+  const allParagraphs: (Paragraph | Table)[] = []
+  
   const totalMarks = problems.reduce((sum, p) => sum + p.marks, 0)
 
   // Cover
