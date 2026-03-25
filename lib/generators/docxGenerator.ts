@@ -158,7 +158,7 @@ export async function generateNotesBuffer(
   options: NotesOptions,
   topic: string
 ): Promise<Buffer> {
-  const allParagraphs: Paragraph[] = []
+  const allParagraphs: (Paragraph | Table)[] = []
 
   // Cover title
   allParagraphs.push(
