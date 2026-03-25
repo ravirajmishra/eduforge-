@@ -43,7 +43,7 @@ export default function Navbar() {
               Features
             </a>
             <div className="w-px h-4 bg-indigo-100" />
-            <a
+            
             <a href="#generator" className="btn-primary px-4 py-2 text-sm">
               Start Creating
             </a>
