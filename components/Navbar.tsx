@@ -44,7 +44,13 @@ export default function Navbar() {
             </a>
             <div className="w-px h-4 bg-indigo-100" />
             <a
-              
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-full text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all"
+            >
+              <Github className="w-4 h-4" />
+            </a>
             <a href="#generator" className="btn-primary px-4 py-2 text-sm">
               Start Creating
             </a>
