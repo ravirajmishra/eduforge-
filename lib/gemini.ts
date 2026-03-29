@@ -8,7 +8,7 @@ import type {
 const getModel = (apiKey?: string) => {
   const key = apiKey || process.env.GEMINI_API_KEY
   if (!key) throw new Error('No Gemini API key found. Enter your key in the API Keys section above.')
-  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-1.5-pro' })
+  return new GoogleGenerativeAI(key).getGenerativeModel({ model: 'gemini-2.0-flash' })
 }
 
 function safeJsonParse<T>(text: string, fallback: T): T {
