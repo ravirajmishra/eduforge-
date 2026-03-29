@@ -1,190 +1,128 @@
-// ─── Document Style Types ──────────────────────────────────────────────────
+import { NextRequest, NextResponse } from 'next/server'
+import {
+  detectTopicType,
+  generatePPTContent,
+  generateNotesContent,
+  generateExercisesContent,
+  generateArticleContent,
+  generateWorkflowSVG,
+} from '@/lib/gemini'
+import { resolveSlideImages } from '@/lib/pexels'
+import { generatePPTBuffer } from '@/lib/generators/pptGenerator'
+import { generateNotesBuffer, generateExercisesBuffer } from '@/lib/generators/docxGenerator'
+import { formatArticle } from '@/lib/generators/articleFormatter'
+import type { GenerationConfig, GenerationResult } from '@/lib/types'
 
-export type PPTStyle = 'professional' | 'balanced' | 'creative' | 'minimalist' | 'bold'
-export type NotesStyle = 'detailed' | 'concise' | 'structured' | 'cornell' | 'outline'
-export type ExerciseStyle = 'worksheet' | 'quiz' | 'problem-set' | 'case-study'
-export type ArticlePlatform = 'linkedin' | 'medium' | 'blog' | 'newsletter'
-export type ArticleTone = 'professional' | 'casual' | 'technical' | 'storytelling'
-export type ArticleContentStyle = 'professional' | 'creative' | 'concise' | 'in-depth'
-export type ContentDepth = 'concise' | 'standard' | 'detailed'
-export type Difficulty = 'easy' | 'medium' | 'hard' | 'mixed'
-export type ColorScheme = 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate' | 'violet'
+export const maxDuration = 120
+export const dynamic = 'force-dynamic'
 
-// ─── BYOK / API Keys ────────────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  try {
+    const config: GenerationConfig = await req.json()
+    const { topic } = config
 
-export interface ApiKeys {
-  gemini?: string
-  pexels?: string
+    if (!topic?.trim()) {
+      return NextResponse.json({ error: 'Topic is required' }, { status: 400 })
+    }
+
+    // BYOK: use keys from request if provided, otherwise fall back to env vars
+    const geminiKey = config.apiKeys?.gemini || undefined
+    const pexelsKey = config.apiKeys?.pexels || undefined
+
+    const isTechTopic = config.isTechTopic === 'auto'
+      ? await detectTopicType(topic, geminiKey)
+      : Boolean(config.isTechTopic)
+
+    const results: Record<string, GenerationResult> = {}
+
+    if (config.generatePPT) {
+      try {
+        const slides = await generatePPTContent(topic, config.pptOptions, isTechTopic, geminiKey)
+        if (config.pptOptions.includeImages) {
+          await resolveSlideImages(slides, pexelsKey)
+        }
+        const pptOpts = {
+          ...config.pptOptions,
+          logoBase64: config.pptOptions.addLogo ? (config.pptOptions.logoBase64 || config.globalLogoBase64) : undefined,
+          watermarkText: config.pptOptions.watermarkText || config.globalWatermark || '',
+        }
+        const buffer = await generatePPTBuffer(slides, pptOpts, topic)
+        results.ppt = {
+          type: 'ppt', status: 'success',
+          fileBase64: buffer.toString('base64'),
+          fileName: `${topic.replace(/[^a-zA-Z0-9]/g, '_')}_Presentation.pptx`,
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        }
+      } catch (err) {
+        results.ppt = { type: 'ppt', status: 'error', error: String(err) }
+      }
+    }
+
+    if (config.generateNotes) {
+      try {
+        const pages = await generateNotesContent(topic, config.notesOptions, isTechTopic, geminiKey)
+        const notesOpts = {
+          ...config.notesOptions,
+          logoBase64: config.notesOptions.addLogo ? (config.notesOptions.logoBase64 || config.globalLogoBase64) : undefined,
+          watermarkText: config.notesOptions.watermarkText || config.globalWatermark || '',
+        }
+        const buffer = await generateNotesBuffer(pages, notesOpts, topic)
+        results.notes = {
+          type: 'notes', status: 'success',
+          fileBase64: buffer.toString('base64'),
+          fileName: `${topic.replace(/[^a-zA-Z0-9]/g, '_')}_Notes.docx`,
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }
+      } catch (err) {
+        results.notes = { type: 'notes', status: 'error', error: String(err) }
+      }
+    }
+
+    if (config.generateExercises) {
+      try {
+        const problems = await generateExercisesContent(topic, config.exerciseOptions, isTechTopic, geminiKey)
+        const exOpts = {
+          ...config.exerciseOptions,
+          logoBase64: config.exerciseOptions.addLogo ? (config.exerciseOptions.logoBase64 || config.globalLogoBase64) : undefined,
+          watermarkText: config.exerciseOptions.watermarkText || config.globalWatermark || '',
+        }
+        const buffer = await generateExercisesBuffer(problems, exOpts, topic)
+        results.exercises = {
+          type: 'exercises', status: 'success',
+          fileBase64: buffer.toString('base64'),
+          fileName: `${topic.replace(/[^a-zA-Z0-9]/g, '_')}_Exercises.docx`,
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }
+      } catch (err) {
+        results.exercises = { type: 'exercises', status: 'error', error: String(err) }
+      }
+    }
+
+    if (config.generateArticle) {
+      try {
+        const article = await generateArticleContent(topic, config.articleOptions, geminiKey)
+        const formatted = formatArticle(article, config.articleOptions)
+        let workflowSvg: string | undefined
+        if (config.articleOptions.includeWorkflowDiagram && article.workflowDiagram?.length) {
+          workflowSvg = generateWorkflowSVG(article.workflowDiagram)
+        }
+        results.article = {
+          type: 'article', status: 'success',
+          fileBase64: Buffer.from(formatted, 'utf-8').toString('base64'),
+          fileName: `${topic.replace(/[^a-zA-Z0-9]/g, '_')}_Article.txt`,
+          mimeType: 'text/plain',
+          articleContent: article,
+          workflowSvg,
+        }
+      } catch (err) {
+        results.article = { type: 'article', status: 'error', error: String(err) }
+      }
+    }
+
+    return NextResponse.json({ ...results, isTechTopic })
+  } catch (err) {
+    console.error('Generation error:', err)
+    const message = String(err).includes('API key') ? 'Invalid or missing API key. Add your Gemini key in the API Keys section.' : String(err)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
-
-// ─── Per-Document Options ──────────────────────────────────────────────────
-
-export interface PPTOptions {
-  slideCount: number
-  style: PPTStyle
-  contentDepth: ContentDepth
-  colorScheme: ColorScheme
-  includeImages: boolean
-  includeWorkflow: boolean
-  includeTableOfContents: boolean
-  includeSummarySlide: boolean
-  speakerNotes: boolean
-  addLogo: boolean
-  watermarkText: string
-  logoBase64?: string
-}
-
-export interface NotesOptions {
-  pageCount: number
-  style: NotesStyle
-  contentDepth: ContentDepth
-  includeCoding: boolean
-  includeExamples: boolean
-  includeKeyTerms: boolean
-  includeQuickRecap: boolean
-  addLogo: boolean
-  watermarkText: string
-  logoBase64?: string
-}
-
-export interface ExerciseOptions {
-  problemCount: number
-  difficulty: Difficulty
-  contentDepth: ContentDepth
-  includeCoding: boolean
-  includeAnswerKey: boolean
-  includeHints: boolean
-  exerciseStyle: ExerciseStyle
-  addLogo: boolean
-  watermarkText: string
-  logoBase64?: string
-}
-
-export interface ArticleOptions {
-  platform: ArticlePlatform
-  tone: ArticleTone
-  contentStyle: ArticleContentStyle
-  wordCount: number
-  includeHashtags: boolean
-  includeWorkflowDiagram: boolean
-  includeStats: boolean
-  includeCallToAction: boolean
-  hashtagCount: number
-}
-
-// ─── Main Config ────────────────────────────────────────────────────────────
-
-export interface GenerationConfig {
-  topic: string
-  isTechTopic: boolean | 'auto'
-  apiKeys?: ApiKeys
-
-  generatePPT: boolean
-  generateNotes: boolean
-  generateExercises: boolean
-  generateArticle: boolean
-
-  globalLogoBase64?: string
-  globalWatermark?: string
-
-  pptOptions: PPTOptions
-  notesOptions: NotesOptions
-  exerciseOptions: ExerciseOptions
-  articleOptions: ArticleOptions
-}
-
-// ─── Generated Content Structures ──────────────────────────────────────────
-
-export interface SlideContent {
-  index: number
-  type: 'title' | 'agenda' | 'content' | 'workflow' | 'image-text' | 'code' | 'summary' | 'section-divider'
-  title: string
-  subtitle?: string
-  bulletPoints?: string[]
-  codeBlock?: string
-  codeLanguage?: string
-  workflowSteps?: WorkflowStep[]
-  imageKeyword?: string
-  imageUrl?: string
-  speakerNote?: string
-  layoutHint: 'left-text-right-image' | 'full-text' | 'centered' | 'two-column' | 'workflow' | 'code'
-}
-
-export interface WorkflowStep {
-  id: string
-  label: string
-  description?: string
-  type: 'start' | 'process' | 'decision' | 'end' | 'data'
-  nextIds: string[]
-}
-
-export interface NotePage {
-  pageIndex: number
-  sectionTitle: string
-  subsections: NoteSubsection[]
-}
-
-export interface NoteSubsection {
-  lineIndex: number
-  heading: string
-  content: string
-  type: 'text' | 'bullet-list' | 'code' | 'key-term' | 'example' | 'recap-box'
-  items?: string[]
-  codeBlock?: string
-  codeLanguage?: string
-}
-
-export interface ExerciseProblem {
-  index: number
-  type: 'mcq' | 'short-answer' | 'long-answer' | 'coding' | 'true-false' | 'fill-blank' | 'case-study'
-  question: string
-  options?: string[]
-  starterCode?: string
-  codeLanguage?: string
-  answer?: string
-  hint?: string
-  difficulty: 'easy' | 'medium' | 'hard'
-  marks: number
-}
-
-export interface ArticleContent {
-  title: string
-  hook: string
-  sections: ArticleSection[]
-  callToAction?: string
-  hashtags?: string[]
-  workflowDiagram?: WorkflowStep[]
-  platform: ArticlePlatform
-  estimatedReadTime: number
-}
-
-export interface ArticleSection {
-  heading: string
-  content: string
-  hasStats?: boolean
-  hasList?: boolean
-  listItems?: string[]
-}
-
-// ─── API Response Types ─────────────────────────────────────────────────────
-
-export interface GenerationResult {
-  type: 'ppt' | 'notes' | 'exercises' | 'article'
-  status: 'success' | 'error'
-  fileBase64?: string
-  fileName?: string
-  mimeType?: string
-  articleContent?: ArticleContent
-  workflowSvg?: string
-  error?: string
-}
-
-export interface GenerateAllResponse {
-  ppt?: GenerationResult
-  notes?: GenerationResult
-  exercises?: GenerationResult
-  article?: GenerationResult
-  isTechTopic: boolean
-}
-
-export type GenerationStep = 'idle' | 'analyzing' | 'generating-ppt' | 'generating-notes' | 'generating-exercises' | 'generating-article' | 'finalizing' | 'done' | 'error'
