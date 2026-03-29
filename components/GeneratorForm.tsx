@@ -239,11 +239,17 @@ export default function GeneratorForm() {
         body: JSON.stringify(config),
       })
       clearInterval(progressInterval)
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Generation failed')
+
+      let data: GenerateAllResponse
+      try {
+        data = await res.json()
+      } catch {
+        throw new Error('Server returned an empty response. Check your API key or reduce slide/page count.')
       }
-      const data: GenerateAllResponse = await res.json()
+
+      if (!res.ok) {
+        throw new Error((data as any).error || 'Generation failed')
+      }
       setProgress(100)
       setCurrentMessage('Done!')
       setStep('done')
